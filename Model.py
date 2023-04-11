@@ -19,7 +19,10 @@ class ValueNetwork(nn.Module):
         super(ValueNetwork, self).__init__()
 
         self.linear1 = nn.Linear(num_inputs, hidden_dim)
-        self.linear2 = nn.Linear(hidden_dim, hidden_dim)
+        self.linear2 = nn.Sequential(
+                       nn.Linear(hidden_dim, hidden_dim * 2),
+                       nn.ELU(),
+                       nn.Linear(hidden_dim * 2, hidden_dim))
         self.linear3 = nn.Linear(hidden_dim, 1)
 
         self.apply(weights_init_)
@@ -37,12 +40,18 @@ class QNetwork(nn.Module):
 
         # Q1 architecture
         self.linear1 = nn.Linear(num_inputs + num_actions, hidden_dim)
-        self.linear2 = nn.Linear(hidden_dim, hidden_dim)
+        self.linear2 = nn.Sequential(
+                       nn.Linear(hidden_dim, hidden_dim * 2),
+                       nn.ELU(),
+                       nn.Linear(hidden_dim * 2, hidden_dim))
         self.linear3 = nn.Linear(hidden_dim, 1)
 
         # Q2 architecture
         self.linear4 = nn.Linear(num_inputs + num_actions, hidden_dim)
-        self.linear5 = nn.Linear(hidden_dim, hidden_dim)
+        self.linear5 = nn.Sequential(
+                       nn.Linear(hidden_dim, hidden_dim * 2),
+                       nn.ELU(),
+                       nn.Linear(hidden_dim * 2, hidden_dim))
         self.linear6 = nn.Linear(hidden_dim, 1)
 
         self.apply(weights_init_)
@@ -66,7 +75,10 @@ class GaussianPolicy(nn.Module):
         super(GaussianPolicy, self).__init__()
         
         self.linear1 = nn.Linear(num_inputs, hidden_dim)
-        self.linear2 = nn.Linear(hidden_dim, hidden_dim)
+        self.linear2 = nn.Sequential(
+                       nn.Linear(hidden_dim, hidden_dim * 2),
+                       nn.ELU(),
+                       nn.Linear(hidden_dim * 2, hidden_dim))
 
         self.mean_linear = nn.Linear(hidden_dim, num_actions)
         self.log_std_linear = nn.Linear(hidden_dim, num_actions)
@@ -115,7 +127,10 @@ class DeterministicPolicy(nn.Module):
     def __init__(self, num_inputs, num_actions, hidden_dim, action_space=None):
         super(DeterministicPolicy, self).__init__()
         self.linear1 = nn.Linear(num_inputs, hidden_dim)
-        self.linear2 = nn.Linear(hidden_dim, hidden_dim)
+        self.linear2 = nn.Sequential(
+                       nn.Linear(hidden_dim, hidden_dim * 2),
+                       nn.ELU(),
+                       nn.Linear(hidden_dim * 2, hidden_dim))
 
         self.mean = nn.Linear(hidden_dim, num_actions)
         self.noise = torch.Tensor(num_actions)

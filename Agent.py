@@ -8,21 +8,22 @@ import copy
 import random
 import numpy as np
 
-BATCH_SIZE = 64
+
 
 class SAC(object):
-    def __init__(self, input_dim, action_space, hidden_dim):
+    def __init__(self, input_dim, action_space, hidden_dim, batch_size, buffer_size):
 
         self.alpha = 0.01
-        self.lr = 5e-6
-        self.device = torch.device("cpu")
+        self.lr = 5e-4
+        self.device = torch.device("cuda")
 
         self.critic = QNetwork(input_dim, action_space.shape[0], hidden_dim).to(device=self.device)
         self.critic_optim = Adam(self.critic.parameters(), lr=self.lr)
 
         self.policy = GaussianPolicy(input_dim, action_space.shape[0], hidden_dim, action_space).to(self.device)
         self.policy_optim = Adam(self.policy.parameters(), lr=self.lr)
-        self.buffer = deque(maxlen=5000)
+        self.buffer = deque(maxlen=buffer_size)
+        self.batch_size = batch_size
 
     def select_action(self, state, evaluate=False):
         state = torch.FloatTensor(state).to(self.device).unsqueeze(0)
@@ -37,10 +38,10 @@ class SAC(object):
         self.buffer.append(copy.deepcopy([state, action, reward]))
 
     def learn(self):
-        if len(self.buffer) < BATCH_SIZE:
+        if len(self.buffer) < self.batch_size:
             return 0, 0, 0
         else:
-            batch = random.sample(self.buffer, BATCH_SIZE)
+            batch = random.sample(self.buffer, self.batch_size)
             states, actions, rewards = zip(*batch)
             batch = (np.array(states), np.array(actions), np.array(rewards))
             return self.update_parameters(batch)

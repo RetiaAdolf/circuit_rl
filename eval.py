@@ -6,10 +6,18 @@ import sys
 
 w_PowerDC, w_GBW, w_RmsNoise, w_SettlingTime, iters = sys.argv[1:]
 model_path = "./checkpoints/sac_checkpoint_EDA_iter_{}".format(iters)
+hidden_size = 128
+batch_size = 512
+buffer_size = 20000
 
-state = np.array([int(w_PowerDC), int(w_GBW), int(w_RmsNoise), int(w_SettlingTime)])
+
+state = np.array([float(w_PowerDC), float(w_GBW), float(w_RmsNoise), float(w_SettlingTime)])
 SimEnv = Env()
-agent = SAC(input_dim=SimEnv.state_dim, action_space=SimEnv.action_space, hidden_dim=64)
+agent = SAC(input_dim=SimEnv.state_dim, 
+            action_space=SimEnv.action_space, 
+            hidden_dim=hidden_size, 
+            batch_size=batch_size,
+            buffer_size=buffer_size)
 if iters == "0":
 	pass
 else:

@@ -6,7 +6,7 @@ class Env(object):
 	"""docstring for Env"""
 	def __init__(self):
 		super(Env, self).__init__()
-		self.state = [1,1,1,1]
+		self.state = [1.0,1.0,1.0,1.0]
 		self.action_space = np.array([[12, 60], [12, 60], [0.00, 0.50]])
 		self.state_dim = len(self.state)
 
@@ -15,11 +15,11 @@ class Env(object):
 			eval_state = self.reset()
 			self.eval_list.append(eval_state)
 
-		self.state = [1,1,1,1]
+		self.state = [1.0,1.0,1.0,1.0]
 
 	def reset(self):
 		while True:
-			state = random.sample(range(0, 8), 4)
+			state = [random.uniform(0, 7) for _ in range(4)]
 			if sum(state) <= 10:
 				self.state = state
 				break
@@ -106,3 +106,8 @@ class Env(object):
 
 		return outputs, reward
 
+
+if __name__ == '__main__':
+	test_env = Env()
+	test_env.reset()
+	print(test_env.state)
