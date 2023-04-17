@@ -5,15 +5,15 @@ import random
 
 TRAIN_ITER = 1000000
 EVAL_INTERVAL = 100
-PRINT_INTERVAL = 100
+PRINT_INTERVAL = 10
 
-eps = 1.0
+eps = 1
 start_iters = 0
 model_path = "checkpoints/sac_checkpoint_EDA_iter_{}".format(start_iters)
-hidden_size = 128
-batch_size = 512
-buffer_size = 20000
-n_augs = 32
+hidden_size = 512
+batch_size = 2048
+buffer_size = 100000
+n_augs = 128
 log = open('train_log.txt', 'a')
 
 qf1_loss_log = []

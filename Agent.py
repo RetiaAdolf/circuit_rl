@@ -13,8 +13,8 @@ import numpy as np
 class SAC(object):
     def __init__(self, input_dim, action_space, hidden_dim, batch_size, buffer_size):
 
-        self.alpha = 0.01
-        self.lr = 5e-4
+        self.alpha = 0.1
+        self.lr = 5e-6
         self.device = torch.device("cuda")
 
         self.critic = QNetwork(input_dim, action_space.shape[0], hidden_dim).to(device=self.device)
@@ -69,7 +69,7 @@ class SAC(object):
         qf1_pi, qf2_pi = self.critic(state_batch, pi)
         min_qf_pi = torch.min(qf1_pi, qf2_pi)
 
-        policy_loss = ((self.alpha * log_pi) - min_qf_pi).mean() # J娄脨 = ??st隆芦D,娄脜t隆芦N[娄脕 * log娄脨(f(娄脜t;st)|st) ? Q(st,f(娄脜t;st))]
+        policy_loss = ((self.alpha * log_pi) - min_qf_pi).mean()
 
         self.policy_optim.zero_grad()
         policy_loss.backward()

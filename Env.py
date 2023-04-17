@@ -41,12 +41,12 @@ class Env(object):
 		M7_W = str(M7_W)
 		IN_OFST = str(IN_OFST)
 		file_path = 'data/M3W_{}_M7W_{}_INOFST_{}.txt'.format(M3_W, M7_W, IN_OFST)
-		if not os.path.exists(file_path):
+		while not os.path.exists(file_path):
 			subprocess.run(['make', 'M3_W={}'.format(M3_W), 'M7_W={}'.format(M7_W), 'IN_OFST={}'.format(IN_OFST)], stdout=subprocess.PIPE)
 		with open(file_path, 'r') as f:
-			f.readline()
-			f.readline()
-			f.readline()
+			data = f.readline().split()
+			while not data:
+				data = f.readline().split()
 			data = f.readline().split()
 
 			PowerDC = float(data[4][:-1])
