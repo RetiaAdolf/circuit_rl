@@ -5,10 +5,10 @@ import random
 import sys
 
 w_PowerDC, w_GBW, w_RmsNoise, w_SettlingTime, iters, alpha = sys.argv[1:]
-model_path = "./checkpoints/sac_checkpoint_EDA_iter_{}".format(iters)
-hidden_size = 256
-batch_size = 1024
-buffer_size = 50000
+model_path = "./models/EDA_iter_{}".format(iters)
+hidden_size = 1024
+batch_size = 10240
+buffer_size = 500000
 
 
 state = np.array([float(w_PowerDC), float(w_GBW), float(w_RmsNoise), float(w_SettlingTime)])
@@ -29,7 +29,7 @@ else:
 
 action = agent.select_action(state, evaluate=True)
 SimEnv.state = state
-output, reward = SimEnv.step(action)
+output, reward = SimEnv.step(action, evaluate=True)
 M3_W, M7_W, IN_OFST = action
 M3_W = str(M3_W)
 M7_W = str(M7_W)

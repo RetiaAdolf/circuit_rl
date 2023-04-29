@@ -7,13 +7,13 @@ TRAIN_ITER = 1000000
 EVAL_INTERVAL = 100
 PRINT_INTERVAL = 10
 
-eps = 1
-start_iters = 0
-model_path = "checkpoints/sac_checkpoint_EDA_iter_{}".format(start_iters)
-hidden_size = 512
-batch_size = 2048
-buffer_size = 100000
-n_augs = 128
+eps = .5
+start_iters = 7400
+model_path = "models/EDA_iter_{}".format(start_iters)
+hidden_size = 1024
+batch_size = 10240
+buffer_size = 500000
+n_augs = 512
 log = open('train_log.txt', 'a')
 
 qf1_loss_log = []
@@ -27,7 +27,7 @@ agent = SAC(input_dim=SimEnv.state_dim,
             hidden_dim=hidden_size, 
             batch_size=batch_size,
             buffer_size=buffer_size)
-if start_iters > 0:
+if start_iters > -1:
 	agent.load_checkpoint(ckpt_path=model_path, evaluate=True)
 for i in range(start_iters + 1, TRAIN_ITER + 1):
 	state = SimEnv.reset()
@@ -47,7 +47,7 @@ for i in range(start_iters + 1, TRAIN_ITER + 1):
 	qf1_loss_log.append(qf1_loss)
 	qf2_loss_log.append(qf2_loss)
 	policy_loss_log.append(policy_loss)
-	eps = max(0.05, eps * 0.999)
+	eps = max(0.3, eps * 0.999)
 
 	if i % EVAL_INTERVAL == 0:
 		agent.save_checkpoint(env_name="EDA", suffix="iter_{}".format(i))
