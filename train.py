@@ -7,8 +7,8 @@ TRAIN_ITER = 1000000
 EVAL_INTERVAL = 100
 PRINT_INTERVAL = 10
 
-eps = .5
-start_iters = 7400
+eps = 1.0
+start_iters = 0
 model_path = "models/EDA_iter_{}".format(start_iters)
 hidden_size = 1024
 batch_size = 10240
@@ -32,7 +32,12 @@ if start_iters > -1:
 for i in range(start_iters + 1, TRAIN_ITER + 1):
 	state = SimEnv.reset()
 	if random.random() < eps:
-		action = SimEnv.random_action()
+		if random.random() < 0.5:
+			base_action = agent.select_action(state, evaluate=False)
+			action = SimEnv.optimize_action(state, base_action)
+		else:
+			base_action = SimEnv.random_action(state)
+			action = SimEnv.optimize_action(state, base_action)
 	else:
 		action = agent.select_action(state, evaluate=False)
 	output, reward = SimEnv.step(action)
@@ -47,7 +52,7 @@ for i in range(start_iters + 1, TRAIN_ITER + 1):
 	qf1_loss_log.append(qf1_loss)
 	qf2_loss_log.append(qf2_loss)
 	policy_loss_log.append(policy_loss)
-	eps = max(0.3, eps * 0.999)
+	eps = max(0.5, eps * 0.999)
 
 	if i % EVAL_INTERVAL == 0:
 		agent.save_checkpoint(env_name="EDA", suffix="iter_{}".format(i))

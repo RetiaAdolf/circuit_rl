@@ -1,4 +1,5 @@
 import subprocess
+import signal
 import os
 import random
 import numpy as np
@@ -7,8 +8,9 @@ class Env(object):
 	"""docstring for Env"""
 	def __init__(self):
 		super(Env, self).__init__()
-		self.state = [1.0,1.0,1.0,1.0]
+		self.state = np.ones(4)
 		self.action_space = np.array([[12, 60], [12, 60], [0.00, 0.50]])
+		self.action_step = np.array([[-5, 5], [-5, 5], [-0.5, 0.5]])
 		self.state_dim = len(self.state)
 
 		self.eval_list = []
@@ -16,115 +18,187 @@ class Env(object):
 			eval_state = self.reset()
 			self.eval_list.append(eval_state)
 
-		self.state = [1.0,1.0,1.0,1.0]
+		self.state = np.ones(4)
+
+	def __softmax__(self, weight):
+		exp_weight = np.exp(weight)
+		return exp_weight / exp_weight.sum(axis=-1)
 
 	def reset(self):
-		while True:
-			state = [random.uniform(0, 7) for _ in range(4)]
-			if sum(state) <= 10:
-				self.state = state
-				break
+		rand_state = np.random.rand(4)
+		self.state = self.__softmax__(rand_state)
 		return self.state
 
 	def reset_eval(self, idx):
 		self.state = self.eval_list[idx]
 		return self.state
 
-	def random_action(self):
+	def optimize_action(self, state, base_action):
+		tasks = []
+		actions = []
+		files = []
+		while len(tasks) < 8:
+			action = self.random_action_with_base(state, base_action)
+			M3_W, M7_W, IN_OFST = action
+			M3_W = str(M3_W)
+			M7_W = str(M7_W)
+			IN_OFST = str(IN_OFST)
+			file_path = '../data/M3W_{}_M7W_{}_INOFST_{}.txt'.format(M3_W, M7_W, IN_OFST)
+			if not os.path.exists(file_path):
+				tasks.append(action)
+			actions.append(action)
+			files.append(file_path)
+			
+		processes = []
+
+		for i, task in enumerate(tasks):
+			container_name = "cadence_{}".format(i+1)
+			command = "make -C /mnt/mydata/RL/run/ M3_W={} M7_W={} IN_OFST={}".format(task['M3_W'], task['M7_W'], task['IN_OFST'])
+			process = run_docker(container_name, command)
+			processes.append(process)
+
+		for process in processes:
+			try:
+				process.wait(timeout=100)
+			except subprocess.TimeoutExpired:
+				pgid = os.getpgid(process.pid)
+				os.killpg(pgid, signal.SIGTERM)
+
+		max_reward = -9999999
+		best_action = None
+		for action, file in zip(actions,files):
+			data = self.__read_file__(file)
+			PowerDC, GBW, RmsNoise, SettlingTime = self.__read_data__(data)
+			output = [PowerDC, GBW, RmsNoise, SettlingTime]
+			_normalize_output = self.__normalization__(output)
+			reward = self.__get_reward__(self.state, _normalize_output)
+			if reward > max_reward:
+				reward = max_reward
+				best_action = action
+
+		return best_action
+
+
+	def random_action(self, state):
 		rand_aciton = []
 		for action in self.action_space:
 			rand_aciton.append(round(random.uniform(action[0],action[1]), 2))
 		return np.array(rand_aciton)
 
-	def step(self, actions, evaluate=False):
-		M3_W, M7_W, IN_OFST = actions
-		M3_W = str(M3_W)
-		M7_W = str(M7_W)
-		IN_OFST = str(IN_OFST)
-		file_path = '../data/M3W_{}_M7W_{}_INOFST_{}.txt'.format(M3_W, M7_W, IN_OFST)
-		while not os.path.exists(file_path):
-			print(file_path)
-			try:
-				container_name = "cadence_1"
-				command = 'make -C /mnt/mydata/RL/run/ M3_W={} M7_W={} IN_OFST={}'.format(M3_W, M7_W, IN_OFST)
-				docker_command = ["docker", "exec", container_name, "/bin/bash", "-ic", command]
-				output = subprocess.check_output(docker_command, stderr=subprocess.STDOUT)
-			except:
-				print("Make command timed out. Killing subprocess...")
-			time.sleep(1)
+	def random_action_with_base(self, state, base_action):
+		rand_aciton = []
+		for i, step in enumerate(self.action_step):
+			var = round(random.uniform(step[0],step[1]), 2)
+			var_action = max(min(base_action[i] + var, self.action_space[i][1]), self.action_space[i][0])
+			rand_aciton.append(round(var_action,2))
+		return np.array(rand_aciton)
+
+
+	def run_docker(container_name, command):
+		process = subprocess.Popen(['docker', 'exec', container_name, "/bin/bash", "-ic", command])
+		return process
+
+	def __read_file__(self, file_path):
 		with open(file_path, 'r') as f:
 			data = f.readline().split()
 			while not data:
 				data = f.readline().split()
 			data = f.readline().split()
-
-			PowerDC = float(data[4][:-1])
-			PowerDC_unit = data[4][-1]
-			if PowerDC_unit == "u":
-				PowerDC = PowerDC
-			elif PowerDC_unit == "n":
-				PowerDC = PowerDC * 1e-3
-			elif PowerDC_unit == "m":
-				PowerDC = PowerDC * 1e3
-
-			GBW = float(data[5][:-1])
-			GBW_unit = data[5][-1]
-			if GBW_unit == "M":
-				GBW = GBW
-			elif GBW_unit == "K":
-				GBW = GBW * 1e-3
-			elif GBW_unit == "G":
-				GBW = GBW * 1e3
-
-			RmsNoise = float(data[6][:-1])
-			RmsNoise_unit = data[6][-1]
-			if RmsNoise_unit == "n":
-				RmsNoise = RmsNoise
-			elif RmsNoise_unit == "p":
-				RmsNoise = RmsNoise * 1e-3
-			elif RmsNoise_unit == "u":
-				RmsNoise = RmsNoise * 1e3
-
-
-			SettlingTime = float(data[7][:-1])
-			SettlingTime_unit = data[7][-1]
-			if SettlingTime_unit == "u":
-				SettlingTime = SettlingTime
-			elif SettlingTime_unit == "n":
-				SettlingTime = SettlingTime * 1e-3
-			elif SettlingTime_unit == "m":
-				SettlingTime = SettlingTime * 1e3
 		f.close()
-		#os.remove(file_path)
+		return data
 
-		outputs = [PowerDC, GBW, RmsNoise, SettlingTime]
-		Weight_PowerDC = self.state[0]
-		Weight_GBW = self.state[1]
-		Weight_RmsNoise = self.state[2]
-		Weight_SettlingTime = self.state[3]
+	def __simulator_step__(self, action):
+		M3_W, M7_W, IN_OFST = action
+		M3_W = str(M3_W)
+		M7_W = str(M7_W)
+		IN_OFST = str(IN_OFST)
+		file_path = '../data/M3W_{}_M7W_{}_INOFST_{}.txt'.format(M3_W, M7_W, IN_OFST)
+		while not os.path.exists(file_path):
+			container_name = "cadence_1"
+			command = 'make -C /mnt/mydata/RL/run/ M3_W={} M7_W={} IN_OFST={}'.format(M3_W, M7_W, IN_OFST)
+			process = run_docker(container_name, command)
+			try:
+				process.wait(timeout=100)
+			except:
+				pgid = os.getpgid(process.pid)
+				os.killpg(pgid, signal.SIGTERM)
 
-		reward = 0
+		data = self.__read_file__(file_path)
+		PowerDC, GBW, RmsNoise, SettlingTime = self.__read_data__(data)
 
-		reward += ((GBW - 1.17) / (10.098753 - 1.175)) * Weight_GBW
-		if GBW < 1.17:
-			reward -= 2 * Weight_GBW
+		return [PowerDC, GBW, RmsNoise, SettlingTime]
 
-		reward += ((14.7 - RmsNoise) / (14.7 - 11)) * Weight_RmsNoise
-		if RmsNoise > 14.7:
-			reward -= 2 * Weight_RmsNoise
+	def __read_data__(self, data):
+		PowerDC = float(data[4][:-1])
+		PowerDC_unit = data[4][-1]
+		if PowerDC_unit == "u":
+			PowerDC = PowerDC
+		elif PowerDC_unit == "n":
+			PowerDC = PowerDC * 1e-3
+		elif PowerDC_unit == "m":
+			PowerDC = PowerDC * 1e3
 
-		reward += ((35 - PowerDC) / (35 - 31.8)) * Weight_PowerDC
-		if PowerDC > 35:
-			reward -= 2 * Weight_PowerDC
+		GBW = float(data[5][:-1])
+		GBW_unit = data[5][-1]
+		if GBW_unit == "M":
+			GBW = GBW
+		elif GBW_unit == "K":
+			GBW = GBW * 1e-3
+		elif GBW_unit == "G":
+			GBW = GBW * 1e3
 
-		reward += ((13.5 - SettlingTime) / (13.5 - 1.72)) * Weight_SettlingTime
-		if SettlingTime > 13.5:
-			reward -= 2 * Weight_SettlingTime
+		RmsNoise = float(data[6][:-1])
+		RmsNoise_unit = data[6][-1]
+		if RmsNoise_unit == "n":
+			RmsNoise = RmsNoise
+		elif RmsNoise_unit == "p":
+			RmsNoise = RmsNoise * 1e-3
+		elif RmsNoise_unit == "u":
+			RmsNoise = RmsNoise * 1e3
 
-		return outputs, reward
+
+		SettlingTime = float(data[7][:-1])
+		SettlingTime_unit = data[7][-1]
+		if SettlingTime_unit == "u":
+			SettlingTime = SettlingTime
+		elif SettlingTime_unit == "n":
+			SettlingTime = SettlingTime * 1e-3
+		elif SettlingTime_unit == "m":
+			SettlingTime = SettlingTime * 1e3
+
+		return PowerDC, GBW, RmsNoise, SettlingTime
+
+	def __get_reward__(self, weight, output):
+		reward = (weight * output).sum(axis=-1)
+		penalty = (weight * (output < 0)).sum(axis=-1) * 5
+		return reward - penalty
+
+	def __normalization__(self, output):
+		PowerDC, GBW, RmsNoise, SettlingTime = output
+
+		PowerDC = ((35 - PowerDC) / (35 - 31.8))
+		GBW = ((GBW - 1.17) / (10.098753 - 1.175))
+		RmsNoise = ((14.7 - RmsNoise) / (14.7 - 11))
+		SettlingTime = ((13.5 - SettlingTime) / (13.5 - 1.72))
+
+		return np.array([PowerDC, GBW, RmsNoise, SettlingTime])
+
+	def step(self, action, evaluate=False):
+
+		output = self.__simulator_step__(action)
+		_normalize_output = self.__normalization__(output)
+		reward = self.__get_reward__(self.state, _normalize_output)
+
+		return output, reward
 
 
 if __name__ == '__main__':
 	test_env = Env()
-	test_env.reset()
-	print(test_env.state)
+	state = test_env.reset()
+	print(state)
+	action = test_env.random_action(state)
+	print(action)
+	action = test_env.random_action_with_base(state, action)
+	print(action)
+	best_action = test_env.optimize_action(state, action)
+	print(best_action)
