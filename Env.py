@@ -10,7 +10,7 @@ class Env(object):
 		super(Env, self).__init__()
 		self.state = np.ones(4)
 		self.action_space = np.array([[12, 60], [12, 60], [0.00, 0.50]])
-		self.action_step = np.array([[-5, 5], [-5, 5], [-0.5, 0.5]])
+		self.action_step = np.array([[-5, 5], [-5, 5], [-0.05, 0.05]])
 		self.state_dim = len(self.state)
 
 		self.eval_list = []
@@ -21,12 +21,12 @@ class Env(object):
 		self.state = np.ones(4)
 
 	def __softmax__(self, weight):
-		exp_weight = np.exp(weight)
+		exp_weight = np.exp(weight / 0.2) 
 		return exp_weight / exp_weight.sum(axis=-1)
 
 	def reset(self):
 		rand_state = np.random.rand(4)
-		self.state = self.__softmax__(rand_state)
+		self.state = (self.__softmax__(rand_state).round(2) * 10) + 1
 		return self.state
 
 	def reset_eval(self, idx):
@@ -37,13 +37,19 @@ class Env(object):
 		tasks = []
 		actions = []
 		files = []
+		add_base = False
 		while len(tasks) < 8:
-			action = self.random_action_with_base(state, base_action)
+			if not add_base:
+				action = base_action
+				add_base = True
+			else:
+				action = self.random_action_with_base(state, base_action)
 			M3_W, M7_W, IN_OFST = action
 			M3_W = str(M3_W)
 			M7_W = str(M7_W)
 			IN_OFST = str(IN_OFST)
 			file_path = '../data/M3W_{}_M7W_{}_INOFST_{}.txt'.format(M3_W, M7_W, IN_OFST)
+			print(file_path)
 			if not os.path.exists(file_path):
 				tasks.append(action)
 			actions.append(action)
@@ -52,9 +58,14 @@ class Env(object):
 		processes = []
 
 		for i, task in enumerate(tasks):
+			M3_W, M7_W, IN_OFST = task
+			M3_W = str(M3_W)
+			M7_W = str(M7_W)
+			IN_OFST = str(IN_OFST)
 			container_name = "cadence_{}".format(i+1)
-			command = "make -C /mnt/mydata/RL/run/ M3_W={} M7_W={} IN_OFST={}".format(task['M3_W'], task['M7_W'], task['IN_OFST'])
-			process = run_docker(container_name, command)
+			command = "make -C /mnt/mydata/RL_{}/run/ M3_W={} M7_W={} IN_OFST={}".format(i+1, M3_W, M7_W, IN_OFST)
+			print("command {} at container {}".format(command, container_name))
+			process = self.run_docker(container_name, command)
 			processes.append(process)
 
 		for process in processes:
@@ -73,8 +84,9 @@ class Env(object):
 			_normalize_output = self.__normalization__(output)
 			reward = self.__get_reward__(self.state, _normalize_output)
 			if reward > max_reward:
-				reward = max_reward
+				max_reward = reward
 				best_action = action
+		print("optimized action {} and reward {}".format(best_action, max_reward))
 
 		return best_action
 
@@ -94,12 +106,16 @@ class Env(object):
 		return np.array(rand_aciton)
 
 
-	def run_docker(container_name, command):
-		process = subprocess.Popen(['docker', 'exec', container_name, "/bin/bash", "-ic", command])
+	def run_docker(self, container_name, command):
+		#print("run command on {}".format(container_name))
+		with open('/dev/null', 'w') as f:
+			process = subprocess.Popen(['docker', 'exec', container_name, "/bin/bash", "-ic", command], stdout=f, stderr=f)
+			#process = subprocess.Popen(['docker', 'exec', container_name, "/bin/bash", "-ic", command])
 		return process
 
 	def __read_file__(self, file_path):
 		with open(file_path, 'r') as f:
+			#print(file_path)
 			data = f.readline().split()
 			while not data:
 				data = f.readline().split()
@@ -116,7 +132,7 @@ class Env(object):
 		while not os.path.exists(file_path):
 			container_name = "cadence_1"
 			command = 'make -C /mnt/mydata/RL/run/ M3_W={} M7_W={} IN_OFST={}'.format(M3_W, M7_W, IN_OFST)
-			process = run_docker(container_name, command)
+			process = self.run_docker(container_name, command)
 			try:
 				process.wait(timeout=100)
 			except:
@@ -170,7 +186,7 @@ class Env(object):
 
 	def __get_reward__(self, weight, output):
 		reward = (weight * output).sum(axis=-1)
-		penalty = (weight * (output < 0)).sum(axis=-1) * 5
+		penalty = (weight * (output < 0)).sum(axis=-1) * 0
 		return reward - penalty
 
 	def __normalization__(self, output):

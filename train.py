@@ -27,7 +27,7 @@ agent = SAC(input_dim=SimEnv.state_dim,
             hidden_dim=hidden_size, 
             batch_size=batch_size,
             buffer_size=buffer_size)
-if start_iters > -1:
+if start_iters > 0:
 	agent.load_checkpoint(ckpt_path=model_path, evaluate=True)
 for i in range(start_iters + 1, TRAIN_ITER + 1):
 	state = SimEnv.reset()
@@ -37,7 +37,11 @@ for i in range(start_iters + 1, TRAIN_ITER + 1):
 			action = SimEnv.optimize_action(state, base_action)
 		else:
 			base_action = SimEnv.random_action(state)
+			for k in range(3):
+				print("optimization iter {}".format(k))
+				base_action = SimEnv.optimize_action(state, base_action)
 			action = SimEnv.optimize_action(state, base_action)
+
 	else:
 		action = agent.select_action(state, evaluate=False)
 	output, reward = SimEnv.step(action)
